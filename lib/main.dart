@@ -17,15 +17,27 @@ class MapSample extends StatefulWidget {
 class MapSampleState extends State<MapSample> {
   final Completer<GoogleMapController> _controller =
   Completer<GoogleMapController>();
+  Set<Marker> _markers = {}; // Set to hold markers
+
+  BitmapDescriptor userIcon = BitmapDescriptor.defaultMarker;
 
   static const CameraPosition _kGooglePlex = CameraPosition(
     target: LatLng(37.43296265331129, -122.08832357078792),
     zoom: 14.4746,
   );
 
+  void setCustomIcon() {
+    BitmapDescriptor.fromAssetImage(ImageConfiguration.empty, "assets/user.png").then(
+      (icon) {
+        userIcon = icon;
+      },
+    );
+  }
+
   @override
   void initState() {
     super.initState();
+    setCustomIcon();
     _requestLocationPermission();
   }
 
@@ -36,29 +48,53 @@ class MapSampleState extends State<MapSample> {
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
       if (permission == LocationPermission.denied) {
-        // Handle the case where the user denies location permission
         print("Location permissions are denied");
-        // You might want to show a dialog or a snackbar to inform the user
       }
     }
 
     if (permission == LocationPermission.deniedForever) {
-      // Handle the case where the user permanently denies location permission
       print("Location permissions are permanently denied");
-      // You might want to show a dialog or a snackbar to inform the user
+    }
+  }
+
+  Future<void> _goToTheUserLocation() async {
+    final GoogleMapController controller = await _controller.future;
+
+    try {
+      Position position =
+      await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
+      LatLng userLocation = LatLng(position.latitude, position.longitude);
+
+      setState(() {
+        _markers.clear(); // Clear existing markers
+        _markers.add(
+          Marker(
+            markerId: MarkerId("user_location"),
+            position: userLocation,
+            icon: userIcon,
+          ),
+        );
+      });
+
+      await controller.animateCamera(CameraUpdate.newLatLng(userLocation));
+    } catch (e) {
+      print("Error getting location: $e");
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      debugShowCheckedModeBanner: false,
       home: Scaffold(
         body: GoogleMap(
-          mapType: MapType.hybrid,
+          mapType: MapType.normal,
           initialCameraPosition: _kGooglePlex,
           onMapCreated: (GoogleMapController controller) {
             _controller.complete(controller);
           },
+          zoomControlsEnabled: false,
+          markers: _markers,
         ),
         floatingActionButton: FloatingActionButton.extended(
           onPressed: _goToTheUserLocation,
@@ -67,18 +103,5 @@ class MapSampleState extends State<MapSample> {
         ),
       ),
     );
-  }
-
-  Future<void> _goToTheUserLocation() async {
-    final GoogleMapController controller = await _controller.future;
-
-    try {
-      Position position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
-      LatLng userLocation = LatLng(position.latitude, position.longitude);
-      await controller.animateCamera(CameraUpdate.newLatLng(userLocation));
-    } catch (e) {
-      print("Error getting location: $e");
-      // Handle the case where getting the location failed
-    }
   }
 }
